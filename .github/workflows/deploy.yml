@@ -1,4 +1,4 @@
-name: Deploy lên DevOps Classroom
+name: Deploy
 
 on:
   push:
@@ -10,9 +10,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Gọi webhook deploy
+      - name: Deploy webhook
         run: |
-          REPO="huyentrang110224/demo-app:latest"
+          REPO="huyentrang110224/demo-app"
           CONTAINER_PORT=80
 
           RESPONSE=$(curl -sS -w "\n%{http_code}" -X POST "${{ secrets.DEPLOY_URL }}?repo=$REPO&tag=latest&slot=1&container_port=$CONTAINER_PORT")
@@ -20,13 +20,13 @@ jobs:
           BODY=$(echo "$RESPONSE" | sed '$d')
           CODE=$(echo "$RESPONSE" | tail -n1)
 
-          echo "Webhook HTTP: $CODE"
+          echo "HTTP: $CODE"
 
           if [ "$CODE" -lt 200 ] || [ "$CODE" -ge 300 ]; then
-            echo "Deploy thất bại."
+            echo "Deploy FAIL"
             echo "$BODY"
             exit 1
           fi
 
-          echo "Deploy thành công."
+          echo "Deploy OK"
           echo "$BODY"
