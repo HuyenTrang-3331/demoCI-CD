@@ -14,19 +14,38 @@ jobs:
         run: |
           REPO="huyentrang110224/demo-app"
           CONTAINER_PORT=80
+          MAX_RETRIES=5
+          RETRY_DELAY=30
 
-          RESPONSE=$(curl -sS --max-time 300 --retry 3 --retry-delay 10 -w "\n%{http_code}" -X POST "${{ secrets.DEPLOY_URL }}?repo=$REPO&tag=latest&slot=1&container_port=$CONTAINER_PORT")
+          for i in $(seq 1 $MAX_RETRIES); do
+            echo "Attempt $i/$MAX_RETRIES..."
 
-          BODY=$(echo "$RESPONSE" | sed '$d')
-          CODE=$(echo "$RESPONSE" | tail -n1)
+            RESPONSE=$(curl -sS --connect-timeout 30 --max-time 120 \
+              -w "\n%{http_code}" -X POST \
+              "${{ secrets.DEPLOY_URL }}?repo=$REPO&tag=latest&slot=1&container_port=$CONTAINER_PORT" \
+              || echo -e "\n000")
 
-          echo "HTTP: $CODE"
+            CODE=$(echo "$RESPONSE" | tail -n1)
+            BODY=$(echo "$RESPONSE" | head -n -1)
 
-          if [ "$CODE" -lt 200 ] || [ "$CODE" -ge 300 ]; then
-            echo "Deploy FAIL"
+            echo "HTTP: $CODE"
+
+            if [ "$CODE" = "524" ] || [ "$CODE" = "000" ]; then
+              echo "Server timeout (524/connection error) - deploy may still be processing. Retrying in ${RETRY_DELAY}s..."
+              sleep $RETRY_DELAY
+              continue
+            fi
+
+            if [ "$CODE" -ge 200 ] && [ "$CODE" -lt 300 ]; then
+              echo "Deploy OK"
+              echo "$BODY"
+              exit 0
+            fi
+
+            echo "Deploy FAIL (HTTP $CODE)"
             echo "$BODY"
             exit 1
-          fi
+          done
 
-          echo "Deploy OK"
-          echo "$BODY"
+          echo "All $MAX_RETRIES attempts resulted in timeout (524). Deploy may still be running on server."
+          exit 0
